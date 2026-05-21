@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lignum Sacrum - Generator opisow produktow</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    :root {
+      --bg: #faf7f2;
+      --card: #ffffff;
+      --ink: #2c2419;
+      --muted: #6b5d4d;
+      --accent: #8b6f47;
+      --accent-dark: #6b5535;
+      --border: #e6dccc;
+      --ok: #2d7a3e;
+      --err: #b3261e;
+      --warn: #b67200;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .container { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.5px; }
+    h2 { font-size: 18px; margin: 0 0 12px; color: var(--accent-dark); }
+    .subtitle { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink); }
+    .hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+    .hint a { color: var(--accent-dark); }
+    input[type="text"], input[type="password"], input[type="number"], select {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: #fff; color: var(--ink);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 180px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    button {
+      background: var(--accent); color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-dark); }
+    button:disabled { background: #c4b8a6; cursor: not-allowed; }
+    button.secondary { background: transparent; color: var(--accent-dark); border: 1px solid var(--border); }
+    button.secondary:hover:not(:disabled) { background: var(--bg); }
+    button.danger { background: var(--err); }
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: 8px; padding: 32px 16px; text-align: center; cursor: pointer; transition: all 0.15s;
+    }
+    .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #fbf6ed; }
+    .dropzone p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+    .file-info { padding: 12px; background: #f6efe2; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+    .file-info strong { color: var(--accent-dark); }
+    .progress-wrap { background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; margin: 8px 0 12px; }
+    .progress-bar { background: var(--accent); height: 100%; width: 0%; transition: width 0.2s; }
+    .stats { display: flex; gap: 16px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+    .stats strong { color: var(--ink); }
+    .log { background: #1e1a14; color: #d4c9b3; font-family: "Consolas", "Monaco", monospace; font-size: 12px; padding: 12px; border-radius: 6px; max-height: 320px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+    .log .ok { color: #6ed47a; }
+    .log .err { color: #ff7066; }
+    .log .warn { color: #ffb84d; }
+    .log .info { color: #7fb4ff; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .checkbox-row input { width: auto; margin: 0; }
+    .checkbox-row label { margin: 0; font-weight: normal; font-size: 13px; }
+    .hidden { display: none !important; }
+    .footer-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge.ok { background: #e1f5e5; color: var(--ok); }
+    .badge.err { background: #fbe4e2; color: var(--err); }
+    .badge.warn { background: #fdf0d8; color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Lignum Sacrum</h1>
+    <p class="subtitle">Generator opisow produktow z Gemini AI - upload CSV z BaseLinker, pobierz wersje z przepisanymi opisami.</p>
+
+    <!-- 1. Klucz API -->
+    <div class="card">
+      <h2>1. Klucz API Gemini</h2>
+      <div class="row">
+        <div style="flex: 3;">
+          <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" />
+          <p class="hint">Klucz jest przechowywany tylko w Twojej przegladarce. Wez go z <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+        </div>
+        <div style="flex: 1;">
+          <button class="secondary" id="saveKeyBtn" type="button">Zapamietaj</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <div>
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="gemini-2.5-flash" selected>gemini-2.5-flash (szybki, tani)</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro (lepsza jakosc, wolniejszy)</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash (starszy fallback)</option>
+          </select>
+        </div>
+        <div>
+          <label for="delay">Delay miedzy requestami (ms)</label>
+          <input type="number" id="delay" value="1000" min="0" step="100" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Plik CSV -->
+    <div class="card">
+      <h2>2. Plik CSV (BaseLinker)</h2>
+      <div class="dropzone" id="dropzone">
+        <p><strong>Kliknij lub przeciagnij plik CSV</strong></p>
+        <p>Wymagane kolumny: <code>produkt_nazwa</code>, <code>opis</code>. Separator: <code>;</code>. Kodowanie: UTF-8.</p>
+        <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden" />
+      </div>
+      <div id="fileInfo" class="file-info hidden"></div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="overwriteEmpty" checked />
+        <label for="overwriteEmpty">Generuj opis nawet jesli kolumna `opis` jest pusta</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="skipExisting" />
+        <label for="skipExisting">Pomin wiersze ktore juz maja opis (przyspiesza, gdy chcesz tylko uzupelnic braki)</label>
+      </div>
+    </div>
+
+    <!-- 3. Start / progres -->
+    <div class="card">
+      <h2>3. Generowanie</h2>
+      <div class="actions">
+        <button id="startBtn" disabled type="button">Start</button>
+        <button id="cancelBtn" class="danger hidden" type="button">Anuluj</button>
+        <button id="downloadBtn" class="secondary hidden" type="button">Pobierz CSV</button>
+      </div>
+      <div id="progressArea" class="hidden" style="margin-top: 16px;">
+        <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="stats">
+          <span>Postep: <strong id="statDone">0</strong> / <strong id="statTotal">0</strong></span>
+          <span>OK: <strong id="statOk" class="badge ok">0</strong></span>
+          <span>Bledy: <strong id="statErr" class="badge err">0</strong></span>
+          <span>Pominiete: <strong id="statSkip" class="badge warn">0</strong></span>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+
+    <p class="footer-note">Lignum Sacrum &middot; Generator opisow &middot; <span id="version">v1.0</span></p>
+  </div>
+
+  <script src="prompt.js"></script>
+  <script>
+    // ============== STATE ==============
+    const state = {
+      file: null,
+      parsed: null,        // { headers, rows, nameIdx, descIdx }
+      processing: false,
+      cancelled: false,
+      results: null,       // rows after processing
+      stats: { done: 0, ok: 0, err: 0, skip: 0, total: 0 },
+    };
+
+    // ============== DOM REFS ==============
+    const el = {
+      apiKey: document.getElementById('apiKey'),
+      saveKeyBtn: document.getElementById('saveKeyBtn'),
+      model: document.getElementById('model'),
+      delay: document.getElementById('delay'),
+      dropzone: document.getElementById('dropzone'),
+      fileInput: document.getElementById('fileInput'),
+      fileInfo: document.getElementById('fileInfo'),
+      overwriteEmpty: document.getElementById('overwriteEmpty'),
+      skipExisting: document.getElementById('skipExisting'),
+      startBtn: document.getElementById('startBtn'),
+      cancelBtn: document.getElementById('cancelBtn'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      progressArea: document.getElementById('progressArea'),
+      progressBar: document.getElementById('progressBar'),
+      statDone: document.getElementById('statDone'),
+      statTotal: document.getElementById('statTotal'),
+      statOk: document.getElementById('statOk'),
+      statErr: document.getElementById('statErr'),
+      statSkip: document.getElementById('statSkip'),
+      log: document.getElementById('log'),
+    };
+
+    // ============== INIT ==============
+    (function init() {
+      const saved = localStorage.getItem('gemini_api_key');
+      if (saved) el.apiKey.value = saved;
+      const savedModel = localStorage.getItem('gemini_model');
+      if (savedModel) el.model.value = savedModel;
+      const savedDelay = localStorage.getItem('gemini_delay');
+      if (savedDelay) el.delay.value = savedDelay;
+    })();
+
+    // ============== UI HANDLERS ==============
+    el.saveKeyBtn.addEventListener('click', () => {
+      if (el.apiKey.value.trim()) {
+        localStorage.setItem('gemini_api_key', el.apiKey.value.trim());
+        localStorage.setItem('gemini_model', el.model.value);
+        localStorage.setItem('gemini_delay', el.delay.value);
+        flash(el.saveKeyBtn, 'Zapisano');
+      }
+    });
+
+    el.dropzone.addEventListener('click', () => el.fileInput.click());
+    el.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); el.dropzone.classList.add('drag'); });
+    el.dropzone.addEventListener('dragleave', () => el.dropzone.classList.remove('drag'));
+    el.dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.dropzone.classList.remove('drag');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    el.fileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    el.startBtn.addEventListener('click', startProcessing);
+    el.cancelBtn.addEventListener('click', () => {
+      state.cancelled = true;
+      log('Anulowanie po biezacym wierszu...', 'warn');
+    });
+    el.downloadBtn.addEventListener('click', downloadResult);
+
+    // ============== FILE HANDLING ==============
+    function handleFile(file) {
+      state.file = file;
+      state.parsed = null;
+      state.results = null;
+      el.downloadBtn.classList.add('hidden');
+      el.fileInfo.classList.remove('hidden');
+      el.fileInfo.innerHTML = `Wczytuje plik <strong>${escapeHtml(file.name)}</strong>...`;
+
+      Papa.parse(file, {
+        header: true,
+        delimiter: ';',
+        skipEmptyLines: true,
+        encoding: 'UTF-8',
+        complete: (res) => {
+          if (res.errors && res.errors.length) {
+            // Pokazujemy ostrzezenie ale nie blokujemy - PapaParse czasem zglasza minor errors
+            console.warn('Parse warnings:', res.errors);
+          }
+          const headers = res.meta.fields || [];
+          const rows = res.data;
+          const nameIdx = headers.indexOf('produkt_nazwa');
+          const descIdx = headers.indexOf('opis');
+
+          if (nameIdx === -1 || descIdx === -1) {
+            el.fileInfo.innerHTML = `<span style="color: var(--err);">Blad: w pliku brakuje kolumny <code>produkt_nazwa</code> lub <code>opis</code>.</span><br>Wykryte kolumny: ${headers.map(h => '<code>'+escapeHtml(h)+'</code>').join(', ')}`;
+            el.startBtn.disabled = true;
+            return;
+          }
+          state.parsed = { headers, rows, nameIdx, descIdx };
+          const withDesc = rows.filter(r => (r.opis || '').trim()).length;
+          el.fileInfo.innerHTML = `Plik: <strong>${escapeHtml(file.name)}</strong><br>` +
+            `Wierszy: <strong>${rows.length}</strong> &middot; Z opisem: <strong>${withDesc}</strong> &middot; Bez opisu: <strong>${rows.length - withDesc}</strong><br>` +
+            `Kolumn: <strong>${headers.length}</strong> (znaleziono <code>produkt_nazwa</code> i <code>opis</code>)`;
+          el.startBtn.disabled = false;
+        },
+        error: (err) => {
+          el.fileInfo.innerHTML = `<span style="color: var(--err);">Blad parsowania: ${escapeHtml(err.message || String(err))}</span>`;
+          el.startBtn.disabled = true;
+        }
+      });
+    }
+
+    // ============== PROCESSING ==============
+    async function startProcessing() {
+      const apiKey = el.apiKey.value.trim();
+      if (!apiKey) { alert('Wpisz klucz API Gemini.'); return; }
+      if (!state.parsed) { alert('Wczytaj najpierw plik CSV.'); return; }
+
+      const { rows, descIdx } = state.parsed;
+      state.processing = true;
+      state.cancelled = false;
+      state.results = rows.map(r => ({ ...r }));
+      state.stats = { done: 0, ok: 0, err: 0, skip: 0, total: rows.length };
+
+      el.startBtn.classList.add('hidden');
+      el.cancelBtn.classList.remove('hidden');
+      el.downloadBtn.classList.add('hidden');
+      el.progressArea.classList.remove('hidden');
+      el.log.innerHTML = '';
+      updateStats();
+
+      const model = el.model.value;
+      const delayMs = parseInt(el.delay.value, 10) || 0;
+      const overwriteEmpty = el.overwriteEmpty.checked;
+      const skipExisting = el.skipExisting.checked;
+
+      log(`Start: ${rows.length} produktow, model ${model}, delay ${delayMs}ms`, 'info');
+
+      for (let i = 0; i < state.results.length; i++) {
+        if (state.cancelled) {
+          log(`Anulowane po ${i} wierszach.`, 'warn');
+          break;
+        }
+        const row = state.results[i];
+        const name = (row.produkt_nazwa || '').trim();
+        const currentDesc = (row.opis || '').trim();
+
+        if (!name) {
+          state.stats.skip++;
+          log(`[${i + 1}/${rows.length}] (pusta nazwa produktu - pomijam)`, 'warn');
+          state.stats.done++;
+          updateStats();
+          continue;
+        }
+        if (!currentDesc && !overwriteEmpty) {
+          state.stats.skip++;
+          log(`[${i + 1}/${rows.length}] ${truncate(name)} (brak opisu, overwriteEmpty=false - pomijam)`, 'warn');
+          state.stats.done++;
+          updateStats();
+          continue;
+        }
+        if (currentDesc && skipExisting) {
+          state.stats.skip++;
+          log(`[${i + 1}/${rows.length}] ${truncate(name)} (juz ma opis, skipExisting=true - pomijam)`, 'warn');
+          state.stats.done++;
+          updateStats();
+          continue;
+        }
+
+        const prompt = buildPrompt(name, currentDesc);
+        try {
+          const response = await callGemini(apiKey, model, prompt);
+          const bodyHtml = extractBodyHtml(response);
+          if (!bodyHtml) {
+            state.stats.err++;
+            log(`[${i + 1}/${rows.length}] ${truncate(name)} - BLAD: brak Body HTML w odpowiedzi modelu`, 'err');
+          } else {
+            row.opis = bodyHtml;
+            state.stats.ok++;
+            log(`[${i + 1}/${rows.length}] ${truncate(name)} OK (${bodyHtml.length} znakow)`, 'ok');
+          }
+        } catch (e) {
+          state.stats.err++;
+          log(`[${i + 1}/${rows.length}] ${truncate(name)} - BLAD: ${e.message}`, 'err');
+        }
+
+        state.stats.done++;
+        updateStats();
+
+        if (delayMs > 0 && i < state.results.length - 1) {
+          await sleep(delayMs);
+        }
+      }
+
+      state.processing = false;
+      el.cancelBtn.classList.add('hidden');
+      el.startBtn.classList.remove('hidden');
+      el.downloadBtn.classList.remove('hidden');
+      log(`Zakonczono. OK: ${state.stats.ok}, bledy: ${state.stats.err}, pominiete: ${state.stats.skip}`, 'info');
+    }
+
+    // ============== GEMINI API ==============
+    async function callGemini(apiKey, model, prompt, attempt = 0) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.95,
+          maxOutputTokens: 4096,
+        }
+      };
+      let resp;
+      try {
+        resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch (netErr) {
+        if (attempt < 2) {
+          await sleep(1000 * Math.pow(3, attempt));
+          return callGemini(apiKey, model, prompt, attempt + 1);
+        }
+        throw new Error('Network error: ' + netErr.message);
+      }
+
+      if (resp.status === 429 || resp.status >= 500) {
+        if (attempt < 2) {
+          const wait = 1000 * Math.pow(3, attempt);
+          log(`HTTP ${resp.status} - retry za ${wait}ms...`, 'warn');
+          await sleep(wait);
+          return callGemini(apiKey, model, prompt, attempt + 1);
+        }
+      }
+      if (!resp.ok) {
+        let errMsg = `HTTP ${resp.status}`;
+        try {
+          const j = await resp.json();
+          if (j.error && j.error.message) errMsg += ` - ${j.error.message}`;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const data = await resp.json();
+      const candidate = data.candidates && data.candidates[0];
+      if (!candidate) throw new Error('Brak odpowiedzi (candidates pusty)');
+      if (candidate.finishReason && candidate.finishReason !== 'STOP' && candidate.finishReason !== 'MAX_TOKENS') {
+        throw new Error('finishReason=' + candidate.finishReason);
+      }
+      const text = (candidate.content && candidate.content.parts || []).map(p => p.text || '').join('');
+      if (!text) throw new Error('Pusta odpowiedz modelu');
+      return text;
+    }
+
+    function extractBodyHtml(text) {
+      // 1) blok ```html ... ```
+      const m1 = text.match(/```html\s*\n([\s\S]*?)\n```/i);
+      if (m1) return m1[1].trim();
+      // 2) pierwszy blok ``` ... ``` (czasami model pomija jezyk)
+      const m2 = text.match(/```\s*\n([\s\S]*?)\n```/);
+      if (m2) {
+        const candidate = m2[1].trim();
+        if (candidate.includes('<') && candidate.includes('>')) return candidate;
+      }
+      // 3) fallback - jesli odpowiedz to czysty HTML
+      if (text.trim().startsWith('<')) return text.trim();
+      // 4) ostatecznosc - zwroc nic
+      return null;
+    }
+
+    // ============== DOWNLOAD ==============
+    function downloadResult() {
+      if (!state.results || !state.parsed) return;
+      const csv = Papa.unparse({
+        fields: state.parsed.headers,
+        data: state.results,
+      }, {
+        delimiter: ';',
+        quotes: true,
+        newline: '\r\n',
+      });
+      // UTF-8 BOM zeby Excel poprawnie pokazal polskie znaki
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const origName = (state.file && state.file.name || 'produkty.csv').replace(/\.csv$/i, '');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+      a.href = url;
+      a.download = `${origName}_AI_${ts}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // ============== UTILS ==============
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function truncate(s, n = 60) { return s.length > n ? s.slice(0, n - 1) + '...' : s; }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function log(msg, cls = '') {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = msg;
+      el.log.appendChild(line);
+      el.log.scrollTop = el.log.scrollHeight;
+    }
+    function updateStats() {
+      const { done, ok, err, skip, total } = state.stats;
+      el.statDone.textContent = done;
+      el.statTotal.textContent = total;
+      el.statOk.textContent = ok;
+      el.statErr.textContent = err;
+      el.statSkip.textContent = skip;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      el.progressBar.style.width = pct + '%';
+    }
+    function flash(btn, text) {
+      const orig = btn.textContent;
+      btn.textContent = text;
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel
+
+# Node (na wypadek gdyby ktos zrobil npm install dla lokalnego servera)
+node_modules/
+
+# Dane (nie commitujemy plikow CSV z produktami)
+*.csv
+!example.csv
