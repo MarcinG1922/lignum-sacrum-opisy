@@ -58,11 +58,12 @@ Przy default delay 1000ms aplikacja robi 60 RPM. Dla Gemini Free zwiększ delay 
 
 ## Format wejściowego CSV
 
-Aplikacja oczekuje pliku CSV z BaseLinker w formacie:
-- Separator: `;`
-- Kodowanie: UTF-8
+Aplikacja oczekuje pliku CSV w formacie:
+- Separator: `,` lub `;` (autodetekcja — eksport z BaseLinker domyślnie `;`, eksport z Google Sheets domyślnie `,`)
+- Kodowanie: UTF-8 (z BOM lub bez)
 - Wymagane kolumny: `produkt_nazwa`, `opis`
-- Pozostałe kolumny (id, sku, ceny, zdjęcia, opis_dodatkowy_1-4 itd.) są zachowywane bez zmian.
+- Pozostałe kolumny (id, sku, ceny, zdjęcia, opis_dodatkowy_1-4 itd.) są zachowywane bez zmian
+- Wynikowy CSV zachowuje ten sam separator co plik wejściowy
 
 ## Stack
 

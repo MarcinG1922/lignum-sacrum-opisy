@@ -116,7 +116,7 @@
       <h2>2. Plik CSV (BaseLinker)</h2>
       <div class="dropzone" id="dropzone">
         <p><strong>Kliknij lub przeciagnij plik CSV</strong></p>
-        <p>Wymagane kolumny: <code>produkt_nazwa</code>, <code>opis</code>. Separator: <code>;</code>. Kodowanie: UTF-8.</p>
+        <p>Wymagane kolumny: <code>produkt_nazwa</code>, <code>opis</code>. Separator: <code>,</code> lub <code>;</code> (auto-wykrycie). Kodowanie: UTF-8.</p>
         <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden" />
       </div>
       <div id="fileInfo" class="file-info hidden"></div>
@@ -299,29 +299,48 @@
 
       Papa.parse(file, {
         header: true,
-        delimiter: ';',
+        delimiter: '',         // pusty = PapaParse auto-wykryje (',', ';', '\t', '|')
+        delimitersToGuess: [';', ',', '\t', '|'],
         skipEmptyLines: true,
         encoding: 'UTF-8',
         complete: (res) => {
           if (res.errors && res.errors.length) {
-            // Pokazujemy ostrzezenie ale nie blokujemy - PapaParse czasem zglasza minor errors
             console.warn('Parse warnings:', res.errors);
           }
-          const headers = res.meta.fields || [];
-          const rows = res.data;
+          const headers = (res.meta.fields || []).map(h => (h || '').replace(/^﻿/, '').trim());
+          // PapaParse ustawia oryginalne nazwy w rows - musimy je tez znormalizowac
+          const rawHeaders = res.meta.fields || [];
+          const rows = res.data.map(r => {
+            const out = {};
+            rawHeaders.forEach((rh, i) => {
+              const cleanKey = headers[i];
+              out[cleanKey] = r[rh];
+            });
+            return out;
+          });
+          const detectedDelim = res.meta.delimiter || ',';
+
           const nameIdx = headers.indexOf('produkt_nazwa');
           const descIdx = headers.indexOf('opis');
 
-          if (nameIdx === -1 || descIdx === -1) {
-            el.fileInfo.innerHTML = `<span style="color: var(--err);">Blad: w pliku brakuje kolumny <code>produkt_nazwa</code> lub <code>opis</code>.</span><br>Wykryte kolumny: ${headers.map(h => '<code>'+escapeHtml(h)+'</code>').join(', ')}`;
+          if (headers.length <= 1) {
+            el.fileInfo.innerHTML = `<span style="color: var(--err);">Blad: wykryto tylko ${headers.length} kolumne. Plik prawdopodobnie ma nietypowy separator. Zapisz CSV z separatorem <code>,</code> lub <code>;</code>.</span>`;
             el.startBtn.disabled = true;
             return;
           }
-          state.parsed = { headers, rows, nameIdx, descIdx };
+          if (nameIdx === -1 || descIdx === -1) {
+            el.fileInfo.innerHTML = `<span style="color: var(--err);">Blad: w pliku brakuje kolumny <code>produkt_nazwa</code> lub <code>opis</code>.</span><br>` +
+              `Separator: <code>${escapeHtml(detectedDelim === '\t' ? '\\t (tab)' : detectedDelim)}</code><br>` +
+              `Wykryte kolumny (${headers.length}): ${headers.map(h => '<code>'+escapeHtml(h)+'</code>').join(', ')}`;
+            el.startBtn.disabled = true;
+            return;
+          }
+          state.parsed = { headers, rows, nameIdx, descIdx, delimiter: detectedDelim };
           const withDesc = rows.filter(r => (r.opis || '').trim()).length;
+          const delimDisplay = detectedDelim === '\t' ? '\\t (tab)' : detectedDelim;
           el.fileInfo.innerHTML = `Plik: <strong>${escapeHtml(file.name)}</strong><br>` +
             `Wierszy: <strong>${rows.length}</strong> &middot; Z opisem: <strong>${withDesc}</strong> &middot; Bez opisu: <strong>${rows.length - withDesc}</strong><br>` +
-            `Kolumn: <strong>${headers.length}</strong> (znaleziono <code>produkt_nazwa</code> i <code>opis</code>)`;
+            `Kolumn: <strong>${headers.length}</strong> &middot; Separator: <code>${escapeHtml(delimDisplay)}</code> (zachowany przy zapisie)`;
           el.startBtn.disabled = false;
         },
         error: (err) => {
@@ -555,7 +574,7 @@
         fields: state.parsed.headers,
         data: state.results,
       }, {
-        delimiter: ';',
+        delimiter: state.parsed.delimiter || ',',
         quotes: true,
         newline: '\r\n',
       });
