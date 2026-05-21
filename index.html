@@ -106,8 +106,14 @@
       </div>
       <div class="row" style="margin-top: 12px;">
         <div>
+          <label for="concurrency">Rownolegle requesty</label>
+          <input type="number" id="concurrency" value="5" min="1" max="20" step="1" />
+          <p class="hint">Ile opisow generowac jednoczesnie. 5 = ~5x szybciej. Zmniejsz jesli dostajesz HTTP 429 (rate limit).</p>
+        </div>
+        <div>
           <label for="delay">Delay miedzy requestami (ms)</label>
-          <input type="number" id="delay" value="1000" min="0" step="100" />
+          <input type="number" id="delay" value="0" min="0" step="100" />
+          <p class="hint">Pauza po kazdym requeście w workerze. Zwykle 0 wystarczy gdy masz concurrency.</p>
         </div>
       </div>
     </div>
@@ -217,6 +223,7 @@
       saveKeyBtn: document.getElementById('saveKeyBtn'),
       model: document.getElementById('model'),
       delay: document.getElementById('delay'),
+      concurrency: document.getElementById('concurrency'),
       dropzone: document.getElementById('dropzone'),
       fileInput: document.getElementById('fileInput'),
       fileInfo: document.getElementById('fileInfo'),
@@ -260,7 +267,9 @@
       el.provider.value = PROVIDERS[savedProvider] ? savedProvider : 'gemini';
       applyProvider(el.provider.value);
       const savedDelay = localStorage.getItem('delay');
-      if (savedDelay) el.delay.value = savedDelay;
+      if (savedDelay !== null) el.delay.value = savedDelay;
+      const savedConcurrency = localStorage.getItem('concurrency');
+      if (savedConcurrency) el.concurrency.value = savedConcurrency;
     })();
 
     // ============== UI HANDLERS ==============
@@ -278,6 +287,7 @@
         localStorage.setItem('provider', el.provider.value);
         localStorage.setItem('model_' + el.provider.value, el.model.value);
         localStorage.setItem('delay', el.delay.value);
+        localStorage.setItem('concurrency', el.concurrency.value);
         flash(el.saveKeyBtn, 'Zapisano');
       }
     });
@@ -385,40 +395,36 @@
       const providerName = el.provider.value;
       const model = el.model.value;
       const delayMs = parseInt(el.delay.value, 10) || 0;
+      const concurrency = Math.max(1, Math.min(20, parseInt(el.concurrency.value, 10) || 1));
       const overwriteEmpty = el.overwriteEmpty.checked;
       const skipExisting = el.skipExisting.checked;
 
-      log(`Start: ${rows.length} produktow, ${providerName} / ${model}, delay ${delayMs}ms`, 'info');
+      log(`Start: ${rows.length} produktow, ${providerName} / ${model}, concurrency=${concurrency}, delay=${delayMs}ms`, 'info');
+      const t0 = Date.now();
 
-      for (let i = 0; i < state.results.length; i++) {
-        if (state.cancelled) {
-          log(`Anulowane po ${i} wierszach.`, 'warn');
-          break;
-        }
+      // Worker pool - kolejka indeksow, N workerow pobiera kolejne
+      const total = state.results.length;
+      let nextIdx = 0;
+
+      async function processOne(i) {
         const row = state.results[i];
         const name = (row.produkt_nazwa || '').trim();
         const currentDesc = (row.opis || '').trim();
 
         if (!name) {
           state.stats.skip++;
-          log(`[${i + 1}/${rows.length}] (pusta nazwa produktu - pomijam)`, 'warn');
-          state.stats.done++;
-          updateStats();
-          continue;
+          log(`[${i + 1}/${total}] (pusta nazwa produktu - pomijam)`, 'warn');
+          return;
         }
         if (!currentDesc && !overwriteEmpty) {
           state.stats.skip++;
-          log(`[${i + 1}/${rows.length}] ${truncate(name)} (brak opisu, overwriteEmpty=false - pomijam)`, 'warn');
-          state.stats.done++;
-          updateStats();
-          continue;
+          log(`[${i + 1}/${total}] ${truncate(name)} (brak opisu, overwriteEmpty=false - pomijam)`, 'warn');
+          return;
         }
         if (currentDesc && skipExisting) {
           state.stats.skip++;
-          log(`[${i + 1}/${rows.length}] ${truncate(name)} (juz ma opis, skipExisting=true - pomijam)`, 'warn');
-          state.stats.done++;
-          updateStats();
-          continue;
+          log(`[${i + 1}/${total}] ${truncate(name)} (juz ma opis, skipExisting=true - pomijam)`, 'warn');
+          return;
         }
 
         const prompt = buildPrompt(name, currentDesc);
@@ -434,30 +440,44 @@
           const bodyHtml = extractBodyHtml(response);
           if (!bodyHtml) {
             state.stats.err++;
-            log(`[${i + 1}/${rows.length}] ${truncate(name)} - BLAD: brak Body HTML w odpowiedzi modelu`, 'err');
+            log(`[${i + 1}/${total}] ${truncate(name)} - BLAD: brak Body HTML w odpowiedzi modelu`, 'err');
           } else {
             row.opis = bodyHtml;
             state.stats.ok++;
-            log(`[${i + 1}/${rows.length}] ${truncate(name)} OK (${bodyHtml.length} znakow)`, 'ok');
+            log(`[${i + 1}/${total}] ${truncate(name)} OK (${bodyHtml.length} znakow)`, 'ok');
           }
         } catch (e) {
           state.stats.err++;
-          log(`[${i + 1}/${rows.length}] ${truncate(name)} - BLAD: ${e.message}`, 'err');
-        }
-
-        state.stats.done++;
-        updateStats();
-
-        if (delayMs > 0 && i < state.results.length - 1) {
-          await sleep(delayMs);
+          log(`[${i + 1}/${total}] ${truncate(name)} - BLAD: ${e.message}`, 'err');
         }
       }
+
+      async function worker(workerId) {
+        while (!state.cancelled) {
+          const i = nextIdx++;
+          if (i >= total) return;
+          await processOne(i);
+          state.stats.done++;
+          updateStats();
+          if (delayMs > 0 && nextIdx < total && !state.cancelled) {
+            await sleep(delayMs);
+          }
+        }
+      }
+
+      const workers = [];
+      for (let w = 0; w < concurrency; w++) workers.push(worker(w));
+      await Promise.all(workers);
+
+      const dt = ((Date.now() - t0) / 1000).toFixed(1);
+      const rate = total > 0 ? (state.stats.done / (dt / 60)).toFixed(1) : '0';
+      if (state.cancelled) log(`Anulowane. Przetworzono ${state.stats.done}/${total} w ${dt}s.`, 'warn');
 
       state.processing = false;
       el.cancelBtn.classList.add('hidden');
       el.startBtn.classList.remove('hidden');
       el.downloadBtn.classList.remove('hidden');
-      log(`Zakonczono. OK: ${state.stats.ok}, bledy: ${state.stats.err}, pominiete: ${state.stats.skip}`, 'info');
+      log(`Zakonczono w ${dt}s (~${rate} opisow/min). OK: ${state.stats.ok}, bledy: ${state.stats.err}, pominiete: ${state.stats.skip}`, 'info');
     }
 
     // ============== GEMINI API ==============
