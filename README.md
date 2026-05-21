@@ -1,6 +1,6 @@
 # Lignum Sacrum — Generator opisów produktów
 
-Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker za pomocą **Google Gemini** lub **Anthropic Claude**. Wszystkie kolumny CSV pozostają niezmienione — nadpisywana jest tylko kolumna `opis` (kolumna J).
+Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker za pomocą **Google Gemini**, **Anthropic Claude** lub **DeepSeek**. Wszystkie kolumny CSV pozostają niezmienione — nadpisywana jest tylko kolumna `opis` (kolumna J).
 
 ## Jak działa
 
@@ -13,7 +13,7 @@ Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker z
 ## Funkcje
 
 - **BYOK** — klucz API wpisujesz w przeglądarce, nie opuszcza Twojego komputera.
-- **Wybór dostawcy** — Google Gemini (2.5 Flash / 2.5 Pro / 2.0 Flash) lub Anthropic Claude (Sonnet 4.6, Opus 4.7, Haiku 4.5).
+- **Wybór dostawcy** — Google Gemini (2.5 Flash / 2.5 Pro / 2.0 Flash), Anthropic Claude (Sonnet 4.6 / Opus 4.7 / Haiku 4.5) lub DeepSeek (v4-flash / v4-pro).
 - **Rate limit handling** — automatyczny retry przy 429/529/5xx z exponential backoff.
 - **Skip / overwrite** — opcje pominięcia wierszy bez opisu lub już z opisem.
 - **Anulowanie** — przerwij w trakcie, pobierz częściowy wynik.
@@ -48,11 +48,13 @@ Cały prompt znajduje się w pliku [`prompt.js`](./prompt.js) jako stała `PROMP
 |---|---|---|
 | Google Gemini | https://aistudio.google.com/apikey | Free tier: 15 RPM, 1500/dzień |
 | Anthropic Claude | https://console.anthropic.com/settings/keys | Wymaga kredytu na koncie (brak free tier dla API) |
+| DeepSeek | https://platform.deepseek.com/api_keys | Najtańszy: $0.14/1M input, $0.28/1M output (v4-flash) |
 
-## Limity
+## Limity i koszty
 
 **Gemini:** Free → 15 RPM. Tier 1 (paid) → ~2000 RPM.
 **Anthropic:** zależy od tier — Tier 1 to 50 RPM dla Sonnet 4.6.
+**DeepSeek:** ~60 RPM dla większości użytkowników. Najtańszy z trójki — Pro ma 75% rabat do 31.05.2026.
 
 Przy default delay 1000ms aplikacja robi 60 RPM. Dla Gemini Free zwiększ delay do co najmniej `4000ms`.
 
@@ -71,4 +73,5 @@ Aplikacja oczekuje pliku CSV w formacie:
 - [PapaParse 5.x](https://www.papaparse.com/) z CDN — parsowanie/budowanie CSV
 - Google Gemini API (`generativelanguage.googleapis.com/v1beta`)
 - Anthropic Claude API (`api.anthropic.com/v1/messages`) — direct browser access z headerem `anthropic-dangerous-direct-browser-access`
+- DeepSeek API (`api.deepseek.com/chat/completions`) — OpenAI-compatible format, CORS wspierany
 - Hosting: Vercel static

@@ -84,6 +84,7 @@
           <select id="provider">
             <option value="gemini" selected>Google Gemini</option>
             <option value="anthropic">Anthropic (Claude)</option>
+            <option value="deepseek">DeepSeek</option>
           </select>
         </div>
         <div>
@@ -192,6 +193,18 @@
           { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5 (najszybszy, najtanszy)' },
         ],
         defaultModel: 'claude-sonnet-4-6',
+      },
+      deepseek: {
+        label: 'DeepSeek',
+        keyLabel: 'Klucz API DeepSeek',
+        keyPlaceholder: 'sk-...',
+        keyHint: 'Klucz jest przechowywany tylko w Twojej przegladarce. Wez go z <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">DeepSeek Platform</a>. Najtansza opcja - ~$0.28/1M tokenow output dla v4-flash.',
+        storageKey: 'deepseek_api_key',
+        models: [
+          { value: 'deepseek-v4-flash', label: 'deepseek-v4-flash (zalecany - szybki, tani)' },
+          { value: 'deepseek-v4-pro', label: 'deepseek-v4-pro (lepsza jakosc, 75% rabat do 31.05.2026)' },
+        ],
+        defaultModel: 'deepseek-v4-flash',
       },
     };
 
@@ -410,9 +423,14 @@
 
         const prompt = buildPrompt(name, currentDesc);
         try {
-          const response = providerName === 'anthropic'
-            ? await callClaude(apiKey, model, prompt)
-            : await callGemini(apiKey, model, prompt);
+          let response;
+          if (providerName === 'anthropic') {
+            response = await callClaude(apiKey, model, prompt);
+          } else if (providerName === 'deepseek') {
+            response = await callDeepSeek(apiKey, model, prompt);
+          } else {
+            response = await callGemini(apiKey, model, prompt);
+          }
           const bodyHtml = extractBodyHtml(response);
           if (!bodyHtml) {
             state.stats.err++;
@@ -547,6 +565,62 @@
         throw new Error('stop_reason=' + data.stop_reason);
       }
       const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+      if (!text) throw new Error('Pusta odpowiedz modelu');
+      return text;
+    }
+
+    // ============== DEEPSEEK API (OpenAI-compatible) ==============
+    async function callDeepSeek(apiKey, model, prompt, attempt = 0) {
+      const url = 'https://api.deepseek.com/chat/completions';
+      const body = {
+        model: model,
+        max_tokens: 4096,
+        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }],
+      };
+      let resp;
+      try {
+        resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey,
+          },
+          body: JSON.stringify(body),
+        });
+      } catch (netErr) {
+        if (attempt < 2) {
+          await sleep(1000 * Math.pow(3, attempt));
+          return callDeepSeek(apiKey, model, prompt, attempt + 1);
+        }
+        throw new Error('Network error: ' + netErr.message);
+      }
+
+      if (resp.status === 429 || resp.status >= 500) {
+        if (attempt < 2) {
+          const wait = 1000 * Math.pow(3, attempt);
+          log(`HTTP ${resp.status} - retry za ${wait}ms...`, 'warn');
+          await sleep(wait);
+          return callDeepSeek(apiKey, model, prompt, attempt + 1);
+        }
+      }
+      if (!resp.ok) {
+        let errMsg = `HTTP ${resp.status}`;
+        try {
+          const j = await resp.json();
+          if (j.error && j.error.message) errMsg += ` - ${j.error.message}`;
+          else if (j.message) errMsg += ` - ${j.message}`;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const data = await resp.json();
+      const choice = data.choices && data.choices[0];
+      if (!choice) throw new Error('Brak odpowiedzi (choices pusty)');
+      if (choice.finish_reason && choice.finish_reason !== 'stop' && choice.finish_reason !== 'length') {
+        throw new Error('finish_reason=' + choice.finish_reason);
+      }
+      const text = (choice.message && choice.message.content) || '';
       if (!text) throw new Error('Pusta odpowiedz modelu');
       return text;
     }
