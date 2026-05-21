@@ -1,6 +1,6 @@
 # Lignum Sacrum — Generator opisów produktów
 
-Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker za pomocą Google Gemini API. Wszystkie kolumny CSV pozostają niezmienione — nadpisywana jest tylko kolumna `opis` (kolumna J).
+Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker za pomocą **Google Gemini** lub **Anthropic Claude**. Wszystkie kolumny CSV pozostają niezmienione — nadpisywana jest tylko kolumna `opis` (kolumna J).
 
 ## Jak działa
 
@@ -12,9 +12,9 @@ Webowa aplikacja, która przepisuje opisy produktów z eksportu CSV BaseLinker z
 
 ## Funkcje
 
-- **BYOK** — klucz API Gemini wpisujesz w przeglądarce, nie opuszcza Twojego komputera.
-- **Wybór modelu** — Gemini 2.5 Flash (default), 2.5 Pro lub 2.0 Flash.
-- **Rate limit handling** — automatyczny retry przy 429/5xx z exponential backoff.
+- **BYOK** — klucz API wpisujesz w przeglądarce, nie opuszcza Twojego komputera.
+- **Wybór dostawcy** — Google Gemini (2.5 Flash / 2.5 Pro / 2.0 Flash) lub Anthropic Claude (Sonnet 4.6, Opus 4.7, Haiku 4.5).
+- **Rate limit handling** — automatyczny retry przy 429/529/5xx z exponential backoff.
 - **Skip / overwrite** — opcje pominięcia wierszy bez opisu lub już z opisem.
 - **Anulowanie** — przerwij w trakcie, pobierz częściowy wynik.
 - **UTF-8 BOM** — wynikowy CSV otwiera się poprawnie w Excelu.
@@ -42,14 +42,19 @@ Nie ma żadnych zmiennych środowiskowych do ustawienia — klucz API jest wpisy
 
 Cały prompt znajduje się w pliku [`prompt.js`](./prompt.js) jako stała `PROMPT_MASTER`. Możesz go modyfikować — zmiana wymaga tylko zapisania pliku i odświeżenia strony (lub re-deploya).
 
-## Limity Gemini
+## Skąd wziąć klucze API
 
-| Plan | Wolumen |
-|---|---|
-| Free | 15 RPM, 1500/dzień |
-| Tier 1 (Pay-as-you-go) | ~2000 RPM |
+| Dostawca | Link | Uwagi |
+|---|---|---|
+| Google Gemini | https://aistudio.google.com/apikey | Free tier: 15 RPM, 1500/dzień |
+| Anthropic Claude | https://console.anthropic.com/settings/keys | Wymaga kredytu na koncie (brak free tier dla API) |
 
-Przy default delay 1000ms aplikacja robi 60 RPM. Dla Free zwiększ delay do co najmniej `4000ms` lub przetwarzaj partiami.
+## Limity
+
+**Gemini:** Free → 15 RPM. Tier 1 (paid) → ~2000 RPM.
+**Anthropic:** zależy od tier — Tier 1 to 50 RPM dla Sonnet 4.6.
+
+Przy default delay 1000ms aplikacja robi 60 RPM. Dla Gemini Free zwiększ delay do co najmniej `4000ms`.
 
 ## Format wejściowego CSV
 
@@ -64,4 +69,5 @@ Aplikacja oczekuje pliku CSV z BaseLinker w formacie:
 - Vanilla JavaScript (brak frameworka)
 - [PapaParse 5.x](https://www.papaparse.com/) z CDN — parsowanie/budowanie CSV
 - Google Gemini API (`generativelanguage.googleapis.com/v1beta`)
+- Anthropic Claude API (`api.anthropic.com/v1/messages`) — direct browser access z headerem `anthropic-dangerous-direct-browser-access`
 - Hosting: Vercel static
